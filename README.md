@@ -10,7 +10,8 @@ Files:
 
 - [src/build_chroma.py](src/build_chroma.py) — ingestion script.
 - [src/retrieve_chroma.py](src/retrieve_chroma.py) — CLI retrieval script.
-- [src/app.py](src/app.py) — Streamlit UI for querying and displaying collection info.
+- [src/app.py](src/app.py) — Streamlit UI for retrieving and displaying collection info.
+- [src/rag_chain.py](src/rag_chain.py) — RAG chain with Groq API for generation.
 - [requirements.txt](requirements.txt) — Python dependencies.
 
 Quick start
@@ -44,6 +45,16 @@ streamlit run src/app.py
 ```
 
 Then open the URL in your browser to select action and collection.
+
+5. For RAG chain with Groq generation:
+
+Set `GROQ_API_KEY` in `.env`, then:
+
+```bash
+python src/rag_chain.py
+```
+
+Then select collection and enter queries for AI-generated answers.
 
 - You can ingest multiple PDFs into the same Chroma persistence directory by giving each PDF a `COLLECTION_NAME` value in `.env`. If `COLLECTION_NAME` is blank, the script will default the collection name to the PDF filename (without extension).
 - Each document chunk will have metadata `source` set to the PDF filename, so you can filter or display which PDF produced a result.

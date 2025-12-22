@@ -8,7 +8,9 @@ This small project shows how to:
 
 Files:
 
-- [src/build_chroma.py](src/build_chroma.py) — main ingestion script.
+- [src/build_chroma.py](src/build_chroma.py) — ingestion script.
+- [src/retrieve_chroma.py](src/retrieve_chroma.py) — CLI retrieval script.
+- [src/app.py](src/app.py) — Streamlit UI for querying and displaying collection info.
 - [requirements.txt](requirements.txt) — Python dependencies.
 
 Quick start
@@ -29,7 +31,19 @@ Edit the `.env` file in the project root and set `PDF_PATH`, `PERSIST_DIR`, `MOD
 python src/build_chroma.py
 ```
 
-Collections and multiple PDFs
+3. For CLI retrieval:
+
+```bash
+python src/retrieve_chroma.py
+```
+
+4. For Streamlit UI:
+
+```bash
+streamlit run src/app.py
+```
+
+Then open the URL in your browser to select action and collection.
 
 - You can ingest multiple PDFs into the same Chroma persistence directory by giving each PDF a `COLLECTION_NAME` value in `.env`. If `COLLECTION_NAME` is blank, the script will default the collection name to the PDF filename (without extension).
 - Each document chunk will have metadata `source` set to the PDF filename, so you can filter or display which PDF produced a result.
@@ -53,5 +67,5 @@ Options:
 
 Notes
 
-- The script uses `TokenTextSplitter` with `encoding_name="cl100k_base"`. You can change that if you target a different tokenizer.
+- The script uses `RecursiveCharacterTextSplitter` for chunking. Chunk sizes are in characters.
 - Models will be downloaded from Hugging Face hub; ensure you have network access.

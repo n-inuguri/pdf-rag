@@ -6,7 +6,7 @@ Reads configuration from `.env`:
 - `MODEL_NAME` (default: sentence-transformers/all-MiniLM-L6-v2)
 - `TOP_K` (optional, default: 5)
 
-Interactive mode: Choose Query, Display info, or Quit. Then select collection.
+Interactive mode: Choose Retrieve, Display info, or Quit. Then select collection.
 
 Usage:
   python src/retrieve_chroma.py
@@ -99,7 +99,7 @@ def main() -> None:
     while True:
         # Prompt for mode
         while True:
-            print("Choose mode: \n 1. Query \n 2. Display info \n 3. Quit ")
+            print("Choose mode: \n 1. Retrieve \n 2. Display info \n 3. Quit ")
             mode = input("Choose mode: ").strip()
             if mode in ['1', '2', '3']:
                 break
@@ -117,7 +117,7 @@ def main() -> None:
         db = Chroma(persist_directory=persist_dir, embedding_function=emb, collection_name=collection_name)
 
         if mode == '1':
-            # Query mode
+            # Retrieve mode
             # get query from argv or prompt
             if len(sys.argv) > 1:
                 query = " ".join(sys.argv[1:])

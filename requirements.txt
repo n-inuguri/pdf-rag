@@ -10,3 +10,4 @@ sentence-transformers
 transformers
 huggingface-hub
 python-dotenv
+streamlit

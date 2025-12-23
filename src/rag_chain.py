@@ -24,8 +24,8 @@ from dotenv import load_dotenv
 
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_chroma.vectorstores import Chroma
-from langchain_classic.chains import RetrievalQA
-from langchain_groq import ChatGroq
+
+from utils import COLLECTIONS, setup_rag_chain
 
 load_dotenv()
 
@@ -35,22 +35,17 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def select_collection() -> str:
     """Prompt user to select a collection from available options."""
-    collections = [
-        ("Sample", "sample.pdf"),
-        ("Construction_Agreement", "Construction_Agreement.pdf"),
-        ("Construction_Contract", "Construction_Contract-for-Major-Works.pdf")
-    ]
     print("Available collections:")
-    for i, (col_name, pdf_name) in enumerate(collections, start=1):
+    for i, (col_name, pdf_name) in enumerate(COLLECTIONS, start=1):
         print(f"{i}. {col_name} ({pdf_name})")
 
     while True:
         try:
-            choice = int(input("Select collection (1-3): "))
-            if 1 <= choice <= len(collections):
-                return collections[choice - 1][0]
+            choice = int(input(f"Select collection (1-{len(COLLECTIONS)}): "))
+            if 1 <= choice <= len(COLLECTIONS):
+                return COLLECTIONS[choice - 1][0]
             else:
-                print("Invalid choice. Please select 1, 2, or 3.")
+                print(f"Invalid choice. Please select a number between 1 and {len(COLLECTIONS)}.")
         except ValueError:
             print("Please enter a number.")
 
@@ -80,9 +75,7 @@ def main() -> None:
     db = Chroma(persist_directory=persist_dir, embedding_function=emb, collection_name=collection_name)
 
     # Set up RAG chain
-    llm = ChatGroq(model=groq_model, api_key=groq_api_key)
-    retriever = db.as_retriever(search_kwargs={"k": top_k})
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
+    qa_chain = setup_rag_chain(db, groq_api_key, groq_model, top_k)
 
     print(f"\nRAG chain ready for collection '{collection_name}'. Type 'quit' to exit.")
 

@@ -12,3 +12,5 @@ huggingface-hub
 python-dotenv
 streamlit
 langchain-groq
+watchdog
+pymupdf

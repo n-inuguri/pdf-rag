@@ -13,47 +13,19 @@ from dotenv import load_dotenv
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_chroma.vectorstores import Chroma
 
+from utils import COLLECTIONS, perform_retrieve, _display_collection_info, display_results, setup_rag_chain
+
 load_dotenv()
 
-# Available collections
-COLLECTIONS = [
-    ("Sample", "sample.pdf"),
-    ("Construction_Agreement", "Construction_Agreement.pdf"),
-    ("Construction_Contract", "Construction_Contract-for-Major-Works.pdf")
-]
+# Disable tokenizers parallelism to avoid warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def get_directory_size(path: str) -> str:
-    """Calculate the total size of a directory in KB or MB."""
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(path):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            try:
-                total_size += os.path.getsize(fp)
-            except OSError:
-                pass
-    if total_size < 1024 * 1024:
-        return f"{total_size / 1024:.2f} KB"
-    else:
-        return f"{total_size / (1024 * 1024):.2f} MB"
-
-def display_collection_info(db: Chroma, collection_name: str, persist_dir: str, model_name: str):
+def display_collection_info(db: Chroma, collection_name: str, persist_dir: str, model_name: str, document_name: str = None):
     """Display information about the selected collection."""
-    try:
-        count = db._collection.count()
-        size = get_directory_size(persist_dir)
-        st.subheader(f"Collection: {collection_name}")
-        st.write(f"**Number of chunks:** {count}")
-        st.write(f"**Database size:** {size} (shared across all collections)")
-        st.write(f"**Embedding model:** {model_name}")
-        st.write(f"**Persist directory:** {persist_dir}")
-        if hasattr(db._collection, 'metadata') and db._collection.metadata:
-            st.write(f"**Collection metadata:** {db._collection.metadata}")
-    except Exception as e:
-        st.error(f"Error retrieving collection info: {e}")
+    _display_collection_info(db, collection_name, persist_dir, model_name, document_name, st.subheader, st.write)
 
 def main():
-    st.title("Chroma Collection Query & Info")
+    st.title("Contract Documents Analysis")
 
     persist_dir = os.getenv("PERSIST_DIR", "../chroma_db")
     model_name = os.getenv("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
@@ -71,41 +43,58 @@ def main():
 
     # Sidebar for selections
     st.sidebar.header("Options")
-    action = st.sidebar.selectbox("Choose action", ["Retrieve", "Display Info"])
+    action = st.sidebar.selectbox("Choose action", ["Display", "Retrieve", "RAG"])
     collection_options = [f"{name} ({pdf})" for name, pdf in COLLECTIONS]
     selected_collection_display = st.sidebar.selectbox("Choose collection", collection_options)
     selected_collection_name = COLLECTIONS[collection_options.index(selected_collection_display)][0]
+    pdf_name = COLLECTIONS[collection_options.index(selected_collection_display)][1]
 
     # Load the collection
     db = Chroma(persist_directory=persist_dir, embedding_function=emb, collection_name=selected_collection_name)
 
     if action == "Retrieve":
-        st.header("Retrieve from the Collection")
+        st.header("Retrieve from the Document")
         query = st.text_input("Enter your query:")
         if st.button("Search"):
             if not query:
                 st.warning("Please enter a query.")
             else:
-                try:
-                    results = db.similarity_search_with_score(query, k=top_k)
-                except Exception:
-                    docs = db.similarity_search(query, k=top_k)
-                    results = [(d, None) for d in docs]
+                results = perform_retrieve(db, query, top_k)
+                display_results(results, st.subheader, st.write)
 
-                for i, (doc, score) in enumerate(results, start=1):
-                    st.subheader(f"Result #{i}")
-                    if score is not None:
-                        st.write(f"**Score:** {score}")
-                    src = doc.metadata.get("source") if getattr(doc, "metadata", None) else None
-                    if src:
-                        st.write(f"**Source:** {src}")
-                    text = doc.page_content.strip()
-                    snippet = text if len(text) < 800 else text[:800] + "..."
-                    st.write(snippet)
+    elif action == "Display":
+        st.header("Document Information")
+        display_collection_info(db, selected_collection_name, persist_dir, model_name, pdf_name)
 
-    elif action == "Display Info":
-        st.header("Collection Information")
-        display_collection_info(db, selected_collection_name, persist_dir, model_name)
+    elif action == "RAG":
+        st.header("RAG Query with Groq")
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        groq_model = os.getenv("GROQ_MODEL_NAME", "llama-3.1-8b-instant")
+        if not groq_api_key:
+            st.error("GROQ_API_KEY not set in .env")
+        else:
+            try:
+                top_k = int(os.getenv("TOP_K", "5"))
+            except ValueError:
+                top_k = 5
+
+            # Set up RAG chain
+            qa_chain = setup_rag_chain(db, groq_api_key, groq_model, top_k)
+
+            # Show which collection is in use for RAG
+            st.caption(f"Collection: {selected_collection_name} ({pdf_name})")
+            query = st.text_input("Enter your query for RAG:")
+            if st.button("Generate Answer"):
+                if not query:
+                    st.warning("Please enter a query.")
+                else:
+                    with st.spinner("Generating answer..."):
+                        try:
+                            result = qa_chain.invoke(query)
+                            st.markdown("**Answer:**")
+                            st.write(result['result'])
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
 if __name__ == "__main__":
     main()

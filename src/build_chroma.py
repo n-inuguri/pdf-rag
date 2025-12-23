@@ -23,7 +23,11 @@ import os
 
 from dotenv import load_dotenv
 
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    PDFPlumberLoader,
+    PyMuPDFLoader,
+)
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_chroma.vectorstores import Chroma
@@ -39,7 +43,15 @@ def build_chroma_from_pdf(
     encoding_name: str = "cl100k_base",
     collection_name: Optional[str] = None,
 ) -> None:
-    loader = PyPDFLoader(pdf_path)
+    # Choose a PDF loader. Some PDFs lose spaces with PyPDF; PDFPlumber/PyMuPDF preserve layout better.
+    loader_choice = os.getenv("PDF_LOADER", "pymupdf").strip().lower()
+    if loader_choice == "pdfplumber":
+        loader = PDFPlumberLoader(pdf_path)
+    elif loader_choice in ("pymupdf", "fitz"):
+        loader = PyMuPDFLoader(pdf_path)
+    else:
+        loader = PyPDFLoader(pdf_path)
+
     docs = loader.load()
 
     splitter = RecursiveCharacterTextSplitter(

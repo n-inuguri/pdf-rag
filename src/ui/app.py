@@ -8,7 +8,7 @@ import streamlit as st
 from pathlib import Path
 import tempfile
 
-from src.config import COLLECTIONS, PERSIST_DIR, MODEL_NAME, TOP_K, GROQ_API_KEY
+from src.config import PERSIST_DIR, MODEL_NAME, TOP_K, GROQ_API_KEY
 from src.core.vectorstore import get_db
 from src.core.rag_service import setup_rag_chain
 from src.core.utils import (
@@ -38,13 +38,22 @@ def main():
     # Sidebar for selections
     st.sidebar.header("Options")
     action = st.sidebar.selectbox("Choose action", ["List Collections", "Upload PDF", "Display", "Retrieve", "RAG"])
-    collection_options = [f"{name} ({pdf})" for name, pdf in COLLECTIONS]
-    selected_collection_display = st.sidebar.selectbox("Choose collection", collection_options)
-    selected_collection_name = COLLECTIONS[collection_options.index(selected_collection_display)][0]
-    pdf_name = COLLECTIONS[collection_options.index(selected_collection_display)][1]
+
+    # Dynamically fetch collections from Chroma
+    stats = list_collections_with_stats(persist_dir)
+    collection_names = [s.get("name") for s in stats if s.get("name")]
+    if not collection_names:
+        st.sidebar.info("No collections found in the database.")
+        selected_collection_name = None
+        selected_sources = []
+    else:
+        selected_collection_name = st.sidebar.selectbox("Choose collection", collection_names)
+        selected = next((s for s in stats if s.get("name") == selected_collection_name), None)
+        selected_sources = (selected.get("sample_sources") if isinstance(selected, dict) else []) or []
+    pdf_name = selected_sources[0] if selected_sources else None
 
     # Load the collection
-    db = get_db(selected_collection_name)
+    db = get_db(selected_collection_name) if selected_collection_name else None
 
     if action == "List Collections":
         st.header("All Collections")
@@ -56,7 +65,7 @@ def main():
                 st.subheader(f"{s.get('name')}")
                 st.write(f"Items: {s.get('count')}")
                 sources = s.get('sample_sources') or []
-                st.write(f"Sample sources: {sources}")
+                st.write(f"Collection sources: {sources}")
 
     elif action == "Upload PDF":
         st.header("Upload and Ingest PDF")
@@ -86,12 +95,15 @@ def main():
                             collection_name=new_collection,
                         )
                         st.success(f"Ingestion complete: collection '{new_collection}' created.")
-                        st.caption("Note: To use this collection in Display/Retrieve/RAG selectors, add it to COLLECTIONS in src/config.py.")
+                        st.caption("This collection should now appear in the selectors above.")
                     except Exception as e:
                         st.error(f"Error during ingestion: {e}")
 
     elif action == "Retrieve":
         st.header("Retrieve from the Document")
+        if not selected_collection_name:
+            st.warning("No collection selected.")
+            return
         query = st.text_input("Enter your query:")
         if st.button("Search"):
             if not query:
@@ -102,18 +114,27 @@ def main():
 
     elif action == "Display":
         st.header("Document Information")
-        display_collection_info(db, selected_collection_name, persist_dir, MODEL_NAME, pdf_name)
+        if not selected_collection_name:
+            st.warning("No collection selected.")
+        else:
+            display_collection_info(db, selected_collection_name, persist_dir, MODEL_NAME, pdf_name)
 
     elif action == "RAG":
         st.header("RAG Query with Groq")
         if not GROQ_API_KEY:
             st.error("GROQ_API_KEY not set in .env")
         else:
+            if not selected_collection_name:
+                st.warning("No collection selected.")
+                return
             # Set up RAG chain (uses config defaults)
             qa_chain = setup_rag_chain(db, TOP_K)
 
-            # Show which collection is in use for RAG
-            st.caption(f"Collection: {selected_collection_name} ({pdf_name})")
+            # Show which collection is in use for RAG, include source if known
+            if pdf_name:
+                st.caption(f"Collection: {selected_collection_name} — Source: {pdf_name}")
+            else:
+                st.caption(f"Collection: {selected_collection_name}")
             query = st.text_input("Enter your query for RAG:")
             if st.button("Generate Answer"):
                 if not query:

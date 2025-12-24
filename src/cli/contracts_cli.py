@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from src.config import PERSIST_DIR, MODEL_NAME, TOP_K, COLLECTIONS, GROQ_API_KEY
+from src.config import PERSIST_DIR, MODEL_NAME, TOP_K, GROQ_API_KEY
 from src.core.vectorstore import get_db
 from src.core.utils import (
     perform_retrieve,
@@ -20,18 +20,29 @@ def _print_block(text: str) -> None:
     print(f"\n{text}")
 
 
-def select_collection() -> tuple[str, str]:
+def select_collection(persist_dir: str) -> tuple[str | None, str | None]:
+    stats = list_collections_with_stats(persist_dir)
+    if not stats:
+        print(f"No collections found in: {persist_dir}")
+        return None, None
+
     print("Available collections:")
-    for i, (col_name, pdf_name) in enumerate(COLLECTIONS, start=1):
-        print(f"{i}. {col_name} ({pdf_name})")
+    for i, s in enumerate(stats, start=1):
+        name = s.get("name")
+        count = s.get("count")
+        print(f"{i}. {name} (items: {count})")
 
     while True:
         try:
-            choice = int(input(f"Select collection (1-{len(COLLECTIONS)}): "))
-            if 1 <= choice <= len(COLLECTIONS):
-                return COLLECTIONS[choice - 1]
+            choice = int(input(f"Select collection (1-{len(stats)}): "))
+            if 1 <= choice <= len(stats):
+                sel = stats[choice - 1]
+                name = sel.get("name")
+                sources = sel.get("sample_sources") or []
+                pdf_name = sources[0] if sources else None
+                return name, pdf_name
             else:
-                print(f"Invalid choice. Please select a number between 1 and {len(COLLECTIONS)}.")
+                print(f"Invalid choice. Please select a number between 1 and {len(stats)}.")
         except ValueError:
             print("Please enter a number.")
 
@@ -65,10 +76,12 @@ def main() -> None:
                     print(f"- {s.get('name')}")
                     print(f"  Items: {s.get('count')}")
                     sources = s.get('sample_sources') or []
-                    print(f"  Sample sources: {sources}")
+                    print(f"  Collection sources: {sources}")
             continue
 
-        collection_name, pdf_name = select_collection()
+        collection_name, pdf_name = select_collection(persist_dir)
+        if not collection_name:
+            continue
         db = get_db(collection_name)
 
         if mode == '2':
